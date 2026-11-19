@@ -1,0 +1,42 @@
+name: Проверка слотов
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # каждые 5 минут (GitHub иногда запускает с опозданием)
+  workflow_dispatch:         # кнопка «Run workflow» для ручного запуска
+    inputs:
+      test:
+        description: "Прислать тестовое сообщение в Telegram"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write            # чтобы бот мог сохранять state.json
+
+concurrency:
+  group: slot-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Проверить страницы
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python checker.py ${{ inputs.test && '--test' || '' }}
+
+      - name: Сохранить состояние
+        run: |
+          git config user.name "slot-bot"
+          git config user.email "slot-bot@users.noreply.github.com"
+          git add state.json
+          git diff --cached --quiet || (git commit -m "Обновлено состояние" && git push)
